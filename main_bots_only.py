@@ -34,6 +34,7 @@ from helper.credential_loader import CredentialLoader
 from schedulers import AutoCloseScheduler
 from schedulers.package_expiry_scheduler import PackageExpiryScheduler
 from schedulers.trial_expiry_scheduler import TrialExpiryScheduler
+from services.bot_registry import BotRegistry
 from services.telegram_admin_bot_service import TelegramAdminBot
 from services.telegram_business_bot_service import AutosumBusinessBot
 from services.telegram_private_bot_service import TelegramPrivateBot
@@ -75,6 +76,14 @@ async def main(loader: CredentialLoader) -> None:
         business_bot = AutosumBusinessBot(loader.autosum_business_bot_token)
         private_bot = TelegramPrivateBot(loader.private_chat_bot_token)
         utils_bot = TelegramUtilsBot(loader.utils_bot_token)
+        
+        # Register bots in the registry
+        bot_registry = BotRegistry()
+        bot_registry.set_standard_bot(standard_bot_service)
+        bot_registry.set_admin_bot(admin_bot)
+        bot_registry.set_business_bot(business_bot)
+        bot_registry.set_private_bot(private_bot)
+        bot_registry.set_utils_bot(utils_bot)
         auto_close_scheduler = AutoCloseScheduler(bot_service=business_bot)
         trial_expiry_scheduler = TrialExpiryScheduler()
         package_expiry_scheduler = PackageExpiryScheduler(

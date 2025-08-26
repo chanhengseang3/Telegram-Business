@@ -44,7 +44,14 @@ class GroupPackage(BaseModel):
         """Get a feature flag value by key, returns default if not found"""
         if not self.feature_flags:
             return default
-        return self.feature_flags.get(key, default)
+        
+        value = self.feature_flags.get(key, default)
+        
+        # Handle string representations of booleans from MySQL JSON
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes')
+        
+        return bool(value)
     
     def set_feature_flag(self, key: str, value: bool) -> None:
         """Set a feature flag value by key"""

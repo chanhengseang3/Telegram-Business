@@ -123,8 +123,8 @@ class ShiftService:
                 .all()
             )
 
-    async def get_shifts_by_end_date(self, chat_id: int, end_date: date) -> list[Shift]:
-        """Get shifts that ended on a specific date (for admin bot)"""
+    async def get_shifts_by_start_date(self, chat_id: int, start_date: date) -> list[Shift]:
+        """Get shifts that started on a specific date (for admin bot)"""
         with get_db_session() as db:
             from sqlalchemy import func
             
@@ -132,11 +132,9 @@ class ShiftService:
                 db.query(Shift)
                 .filter(
                     Shift.chat_id == chat_id,
-                    func.date(Shift.end_time) == end_date,
-                    Shift.end_time.is_not(None),  # Only closed shifts have end_time
-                    Shift.is_closed == True
+                    func.date(Shift.start_time) == start_date
                 )
-                .order_by(Shift.number)
+                .order_by(Shift.id)
                 .all()
             )
 
@@ -203,23 +201,50 @@ class ShiftService:
 
             return [d[0] for d in dates]
 
-    async def get_recent_end_dates_with_shifts(
+    async def get_recent_start_dates_with_shifts(
         self, chat_id: int, days: int = 3
     ) -> list[date]:
-        """Get last N dates based on shift end dates (for admin bot)"""
+        """Get last N dates based on shift start dates (for admin bot)"""
         with get_db_session() as db:
             from sqlalchemy import func
             
             dates = (
-                db.query(func.date(Shift.end_time))
+                db.query(func.date(Shift.start_time))
+                .filter(Shift.chat_id == chat_id)
+                .distinct()
+                .order_by(func.date(Shift.start_time).desc())
+                .limit(days)
+                .all()
+            )
+
+            return [d[0] for d in dates]
+
+    async def get_all_start_dates_with_shifts_in_month(
+        self, chat_id: int, year: int, month: int
+    ) -> list[date]:
+        """Get all dates with shifts in a specific month"""
+        with get_db_session() as db:
+            from sqlalchemy import func, and_
+            from datetime import datetime
+            
+            # Create start and end of month
+            start_of_month = datetime(year, month, 1)
+            if month == 12:
+                end_of_month = datetime(year + 1, 1, 1)
+            else:
+                end_of_month = datetime(year, month + 1, 1)
+            
+            dates = (
+                db.query(func.date(Shift.start_time))
                 .filter(
-                    Shift.chat_id == chat_id,
-                    Shift.end_time.is_not(None),  # Only closed shifts have end_time
-                    Shift.is_closed == True
+                    and_(
+                        Shift.chat_id == chat_id,
+                        Shift.start_time >= start_of_month,
+                        Shift.start_time < end_of_month
+                    )
                 )
                 .distinct()
-                .order_by(func.date(Shift.end_time).desc())
-                .limit(days)
+                .order_by(func.date(Shift.start_time).desc())
                 .all()
             )
 

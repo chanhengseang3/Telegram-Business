@@ -120,9 +120,15 @@ class GroupPackageService:
             if group_package:
                 # Merge new feature flags with existing ones
                 current_flags = group_package.feature_flags or {}
-                current_flags.update(feature_flags)
-                group_package.feature_flags = current_flags
+                # Create a new dict to ensure SQLAlchemy detects the change
+                new_flags = current_flags.copy()
+                new_flags.update(feature_flags)
+                group_package.feature_flags = new_flags
                 group_package.updated_at = DateUtils.now()
+                
+                # Mark the field as modified to ensure SQLAlchemy saves it
+                from sqlalchemy.orm import attributes
+                attributes.flag_modified(group_package, 'feature_flags')
 
                 db.commit()
                 db.refresh(group_package)

@@ -1,0 +1,78 @@
+name: Deploy Additional Telethon Client
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+jobs:
+  deploy-additional-telethon:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Deploy Additional Telethon Client via SSH
+      uses: appleboy/ssh-action@v0.1.10
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        password: ${{ secrets.PASSWORD }}
+        port: 22
+        script: |
+          cd telegram-listener
+          git restore .env.additional
+          git switch main
+          git pull origin main
+          
+          # Create virtual environment if it doesn't exist
+          if [ ! -d "/root/telegram-listener/myenv" ]; then
+            echo "Creating virtual environment..."
+            python3 -m venv /root/telegram-listener/myenv --system-site-packages
+          fi
+          
+          echo "Activating virtual environment..."
+          source /root/telegram-listener/myenv/bin/activate
+          
+          # Ensure pip is up to date
+          python3 -m pip install --upgrade pip
+          
+          # Create .env.additional file with secrets from GitHub
+          cat > .env.additional << EOF
+          DB_NAME=${{ secrets.DB_NAME }}
+          DB_USER=${{ secrets.DB_USER }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          DB_HOST=${{ secrets.DB_HOST }}
+          
+          ADDITIONAL_API_ID_1=${{ secrets.ADDITIONAL_API_ID_1 }}
+          ADDITIONAL_API_HASH_1=${{ secrets.ADDITIONAL_API_HASH_1 }}
+          ADDITIONAL_PHONE_NUMBER_1=${{ secrets.ADDITIONAL_PHONE_NUMBER_1 }}
+          
+          ADDITIONAL_API_ID_2=${{ secrets.ADDITIONAL_API_ID_2 }}
+          ADDITIONAL_API_HASH_2=${{ secrets.ADDITIONAL_API_HASH_2 }}
+          ADDITIONAL_PHONE_NUMBER_2=${{ secrets.ADDITIONAL_PHONE_NUMBER_2 }}
+          
+          ADDITIONAL_API_ID_3=${{ secrets.ADDITIONAL_API_ID_3 }}
+          ADDITIONAL_API_HASH_3=${{ secrets.ADDITIONAL_API_HASH_3 }}
+          ADDITIONAL_PHONE_NUMBER_3=${{ secrets.ADDITIONAL_PHONE_NUMBER_3 }}
+          
+          ADDITIONAL_API_ID_4=${{ secrets.ADDITIONAL_API_ID_4 }}
+          ADDITIONAL_API_HASH_4=${{ secrets.ADDITIONAL_API_HASH_4 }}
+          ADDITIONAL_PHONE_NUMBER_4=${{ secrets.ADDITIONAL_PHONE_NUMBER_4 }}
+          
+          ADDITIONAL_API_ID_5=${{ secrets.ADDITIONAL_API_ID_5 }}
+          ADDITIONAL_API_HASH_5=${{ secrets.ADDITIONAL_API_HASH_5 }}
+          ADDITIONAL_PHONE_NUMBER_5=${{ secrets.ADDITIONAL_PHONE_NUMBER_5 }}
+          EOF
+          
+          pip install -r requirements.txt
+          
+          # Deploy additional telethon service file
+          sudo cp .github/service/mytelethon-additional.service /etc/systemd/system/
+          sudo systemctl daemon-reload
+          
+          # Stop any existing additional telethon service
+          sudo systemctl stop mytelethon-additional || true
+          
+          # Start additional telethon client
+          sudo systemctl start mytelethon-additional
+          sudo systemctl enable mytelethon-additional
+          echo "=== ADDITIONAL TELETHON CLIENT DEPLOYMENT COMPLETED SUCCESSFULLY: $(date) ==="

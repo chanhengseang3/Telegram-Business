@@ -1,0 +1,15 @@
+[Unit]
+Description=My Additional Telethon Client
+After=network.target
+
+[Service]
+User=root
+Group=root
+WorkingDirectory=/root/telegram-listener
+ExecStart=/root/telegram-listener/myenv/bin/python3 /root/telegram-listener/main_telethon_only.py --additional
+Restart=always
+#RestartSec=5
+EnvironmentFile=/root/telegram-listener/.env.additional
+
+[Install]
+WantedBy=multi-user.target

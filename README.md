@@ -74,37 +74,140 @@ Feedback and contributions are welcome!
 
 ## Deployment
 
-### GitHub Actions
+This project supports two separate deployment modes: **Main Telethon Service** and **Additional Telethon Service** for better isolation and reliability.
 
-This project uses GitHub Actions for CI/CD. The workflow will automatically build, test, and deploy your application when you push to the main branch.
+### Architecture Overview
 
-### Setting up SSH Deployment
+- **Main Service**: Handles primary phone numbers and critical operations
+- **Additional Service**: Handles additional phone numbers independently
+- **Benefits**: If additional service fails (e.g., verification codes), main service continues uninterrupted
 
-To enable automatic deployment to your server, you need to add the following secrets in your GitHub repository:
+### GitHub Actions Deployment
 
-1. Go to your GitHub repository → Settings → Secrets and variables → Actions → New repository secret
-2. Add the following secrets:
+The project includes two separate CD pipelines:
 
-   - `HOST`: Your server IP address or domain name
-   - `USERNAME`: SSH username for your server
-   - `SSH_PRIVATE_KEY`: The private SSH key for authentication
-   - `SSH_PASSPHRASE`: The passphrase for your SSH key (if applicable)
-   - `SSH_PORT`: The SSH port number (usually 22)
-   - `PROJECT_PATH`: The full path to your project directory on the server
+1. **`deploy-telethon-main.yml`** - Deploys main service
+2. **`deploy-additional-telethon.yml`** - Deploys additional service
 
-### Docker Deployment
+### Setting up GitHub Secrets
 
-You can also deploy using Docker:
+Go to your GitHub repository → Settings → Secrets and variables → Actions → New repository secret
 
+#### Required Secrets for Both Services:
+```
+HOST=your-server-ip
+USERNAME=your-ssh-username  
+PASSWORD=your-ssh-password
+DB_NAME=your-database-name
+DB_USER=your-database-user
+DB_PASSWORD=your-database-password
+DB_HOST=your-database-host
+```
+
+#### Main Service Secrets:
+```
+PHONE_NUMBER1=+1234567890
+API_ID1=12345678
+API_HASH1=your-api-hash-1
+
+PHONE_NUMBER2=+1234567891  
+API_ID2=12345679
+API_HASH2=your-api-hash-2
+# ... up to PHONE_NUMBER9, API_ID9, API_HASH9
+```
+
+#### Additional Service Secrets:
+```
+ADDITIONAL_PHONE_NUMBER_1=+1234567892
+ADDITIONAL_API_ID_1=12345680
+ADDITIONAL_API_HASH_1=your-additional-api-hash-1
+
+ADDITIONAL_PHONE_NUMBER_2=+1234567893
+ADDITIONAL_API_ID_2=12345681  
+ADDITIONAL_API_HASH_2=your-additional-api-hash-2
+# ... up to _5
+```
+
+### Manual Deployment
+
+#### Deploy Main Service:
+1. Go to Actions → Deploy Telethon Client (Main) → Run workflow
+
+#### Deploy Additional Service:
+1. Go to Actions → Deploy Additional Telethon Client → Run workflow
+
+### Local Development
+
+#### Running Main Service:
 ```bash
-# Build and start containers
-docker-compose up -d
+# Set environment variables in .env.telethon
+python main_telethon_only.py
+```
+
+#### Running Additional Service:
+```bash  
+# Set environment variables in .env.additional
+python main_telethon_only.py --additional
+```
+
+### Service Management (Production)
+
+#### Main Service:
+```bash
+# Start/stop/restart main service
+sudo systemctl start mytelethon
+sudo systemctl stop mytelethon  
+sudo systemctl restart mytelethon
 
 # View logs
-docker-compose logs -f bot
+sudo journalctl -u mytelethon -f
+```
 
-# Stop containers
-docker-compose down
+#### Additional Service:
+```bash
+# Start/stop/restart additional service
+sudo systemctl start mytelethon-additional
+sudo systemctl stop mytelethon-additional
+sudo systemctl restart mytelethon-additional
+
+# View logs  
+sudo journalctl -u mytelethon-additional -f
+```
+
+### Verification Code Handling
+
+⚠️ **Important**: Additional services that require verification codes should be authenticated manually:
+
+1. SSH into your server
+2. Stop the additional service: `sudo systemctl stop mytelethon-additional`
+3. Run manually for verification: `cd /root/telegram-listener && source myenv/bin/activate && python main_telethon_only.py --additional`
+4. Enter verification code when prompted
+5. Restart service: `sudo systemctl start mytelethon-additional`
+
+### Environment Files Structure
+
+#### Main Service (`.env.telethon`):
+```bash
+DB_NAME=your-db
+DB_USER=your-user
+DB_PASSWORD=your-password
+DB_HOST=your-host
+
+PHONE_NUMBER1=+1234567890
+API_ID1=12345678
+API_HASH1=your-api-hash
+```
+
+#### Additional Service (`.env.additional`):
+```bash
+DB_NAME=your-db
+DB_USER=your-user  
+DB_PASSWORD=your-password
+DB_HOST=your-host
+
+ADDITIONAL_PHONE_NUMBER_1=+1234567892
+ADDITIONAL_API_ID_1=12345680
+ADDITIONAL_API_HASH_1=your-additional-api-hash
 ```
 
 ## License

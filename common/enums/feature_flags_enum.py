@@ -18,6 +18,7 @@ class FeatureFlags(Enum):
     
     # Business features
     SHIFT_MANAGEMENT = "shift_management"
+    SHIFT_PERMISSIONS = "shift_permissions"
     AUTOMATED_REPORTS = "automated_reports"
     API_ACCESS = "api_access"
     

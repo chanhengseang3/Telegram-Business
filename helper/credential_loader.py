@@ -15,6 +15,12 @@ class CredentialLoader:
         "API_HASH1",
         "PHONE_NUMBER1",
     ]
+    
+    ADDITIONAL_TELETHON_REQUIRED_ENV_VARS = [
+        "ADDITIONAL_API_ID_1",
+        "ADDITIONAL_API_HASH_1", 
+        "ADDITIONAL_PHONE_NUMBER_1",
+    ]
 
     OPTIONAL_ENV_VARS = ["TIMEZONE"]
 
@@ -38,6 +44,12 @@ class CredentialLoader:
             setattr(self, f'api_id{i}', None)
             setattr(self, f'api_hash{i}', None)
             setattr(self, f'phone_number{i}', None)
+            
+        # Support for additional phone numbers (1-5)
+        for i in range(1, 6):
+            setattr(self, f'additional_api_id_{i}', None)
+            setattr(self, f'additional_api_hash_{i}', None)
+            setattr(self, f'additional_phone_number_{i}', None)
 
     def load_credentials(self, mode: str = "both") -> dict:
         """
@@ -75,6 +87,18 @@ class CredentialLoader:
             setattr(self, f'api_id{i}', api_id_val if api_id_val else None)
             setattr(self, f'api_hash{i}', api_hash_val if api_hash_val else None)
             setattr(self, f'phone_number{i}', phone_val if phone_val else None)
+            
+        # Load additional phone number configurations (1-5) for additional service
+        for i in range(1, 6):
+            api_id_val = os.getenv(f'ADDITIONAL_API_ID_{i}')
+            api_hash_val = os.getenv(f'ADDITIONAL_API_HASH_{i}')
+            phone_val = os.getenv(f'ADDITIONAL_PHONE_NUMBER_{i}')
+            
+            print(f"Loading additional config {i}: ADDITIONAL_API_ID_{i}={api_id_val}, ADDITIONAL_API_HASH_{i}={api_hash_val}, ADDITIONAL_PHONE_NUMBER_{i}={phone_val}")
+            
+            setattr(self, f'additional_api_id_{i}', api_id_val if api_id_val else None)
+            setattr(self, f'additional_api_hash_{i}', api_hash_val if api_hash_val else None)
+            setattr(self, f'additional_phone_number_{i}', phone_val if phone_val else None)
 
         # Determine which variables are required based on mode
         required_vars = []
@@ -84,12 +108,16 @@ class CredentialLoader:
             required_vars = self.BOT_REQUIRED_ENV_VARS
         elif mode == "telethon_only":
             required_vars = self.TELETHON_REQUIRED_ENV_VARS
+        elif mode == "additional_telethon":
+            required_vars = self.ADDITIONAL_TELETHON_REQUIRED_ENV_VARS
         else:
-            raise ValueError(f"Invalid mode: {mode}. Use 'both', 'bots_only', or 'telethon_only'")
+            raise ValueError(f"Invalid mode: {mode}. Use 'both', 'bots_only', 'telethon_only', or 'additional_telethon'")
 
         # Check for missing required variables
         for var in required_vars:
-            if not getattr(self, var.lower()):
+            # Convert variable name to attribute name
+            attr_name = var.lower()
+            if not getattr(self, attr_name):
                 missing.append(var)
 
         if missing:

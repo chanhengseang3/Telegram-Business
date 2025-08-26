@@ -66,23 +66,45 @@ async def main(loader: CredentialLoader) -> None:
         # Support multiple phone numbers from environment variables
         phone_configs = []
         
-        # Check for multiple phone number configurations
-        for i in range(1, 10):  # Support up to 9 phone numbers
-            api_id = getattr(loader, f'api_id{i}', None)
-            api_hash = getattr(loader, f'api_hash{i}', None)
-            phone_number = getattr(loader, f'phone_number{i}', None)
-            
-            logger.info(f"Checking config {i}: api_id={api_id}, api_hash={api_hash}, phone={phone_number}")
-            
-            if api_id and api_hash and phone_number:
-                phone_configs.append({
-                    'phone': phone_number,
-                    'api_id': api_id,
-                    'api_hash': api_hash
-                })
-                logger.info(f"Found configuration for phone number {i}: {phone_number}")
-            else:
-                logger.info(f"Skipping config {i}: missing values")
+        # Check if running as additional service
+        is_additional = "--additional" in __import__('sys').argv
+        
+        if is_additional:
+            # Load additional phone number configurations (1-5)
+            for i in range(1, 6):
+                api_id = getattr(loader, f'additional_api_id_{i}', None)
+                api_hash = getattr(loader, f'additional_api_hash_{i}', None)
+                phone_number = getattr(loader, f'additional_phone_number_{i}', None)
+                
+                logger.info(f"Checking additional config {i}: api_id={api_id}, api_hash={api_hash}, phone={phone_number}")
+                
+                if api_id and api_hash and phone_number:
+                    phone_configs.append({
+                        'phone': phone_number,
+                        'api_id': api_id,
+                        'api_hash': api_hash
+                    })
+                    logger.info(f"Found additional configuration for phone number {i}: {phone_number}")
+                else:
+                    logger.info(f"Skipping additional config {i}: missing values")
+        else:
+            # Check for multiple phone number configurations (main service)
+            for i in range(1, 10):  # Support up to 9 phone numbers
+                api_id = getattr(loader, f'api_id{i}', None)
+                api_hash = getattr(loader, f'api_hash{i}', None)
+                phone_number = getattr(loader, f'phone_number{i}', None)
+                
+                logger.info(f"Checking config {i}: api_id={api_id}, api_hash={api_hash}, phone={phone_number}")
+                
+                if api_id and api_hash and phone_number:
+                    phone_configs.append({
+                        'phone': phone_number,
+                        'api_id': api_id,
+                        'api_hash': api_hash
+                    })
+                    logger.info(f"Found configuration for phone number {i}: {phone_number}")
+                else:
+                    logger.info(f"Skipping config {i}: missing values")
 
         if not phone_configs:
             raise ValueError("No phone number configurations found")
@@ -91,17 +113,8 @@ async def main(loader: CredentialLoader) -> None:
         service_tasks = []
         
         for i, config in enumerate(phone_configs):
-            if i == 0:
-                # Use the existing service for the first phone number (primary)
-                task = asyncio.create_task(
-                    telethon_client_service.start(
-                        config['phone'], config['api_id'], config['api_hash'], is_primary=True
-                    )
-                )
-                service_tasks.append(task)
-                logger.info(f"Started primary telethon client for {config['phone']}")
-            else:
-                # Create additional services for other phone numbers
+            if is_additional or i > 0:
+                # All services in additional mode are non-primary, or additional services in main mode
                 additional_service = TelethonClientService()
                 task = asyncio.create_task(
                     additional_service.start(
@@ -110,6 +123,15 @@ async def main(loader: CredentialLoader) -> None:
                 )
                 service_tasks.append(task)
                 logger.info(f"Started additional telethon client for {config['phone']}")
+            else:
+                # Use the existing service for the first phone number in main mode (primary)
+                task = asyncio.create_task(
+                    telethon_client_service.start(
+                        config['phone'], config['api_id'], config['api_hash'], is_primary=True
+                    )
+                )
+                service_tasks.append(task)
+                logger.info(f"Started primary telethon client for {config['phone']}")
 
         tasks.update(service_tasks)
         logger.info(f"All {len(service_tasks)} telethon clients started successfully")
@@ -122,9 +144,19 @@ async def main(loader: CredentialLoader) -> None:
 
 
 if __name__ == "__main__":
+    import sys
+    
     try:
         loader = CredentialLoader()
-        loader.load_credentials(mode="telethon_only")
+        
+        # Check if running as additional service
+        is_additional = "--additional" in sys.argv
+        
+        if is_additional:
+            loader.load_credentials(mode="additional_telethon")
+        else:
+            loader.load_credentials(mode="telethon_only")
+            
         asyncio.run(main(loader))
 
     except KeyboardInterrupt:

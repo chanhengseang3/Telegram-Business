@@ -148,6 +148,16 @@ class ChatSearchHandler:
                         package_handler = PackageHandler()
                         return await package_handler.display_package_details(update, context)
                     
+                    # For update_group command, route to the new handler
+                    elif command_type == "update_group":
+                        # Store chat_id for later use
+                        context.user_data["selected_chat_id"] = int(chat_id)
+                        
+                        # Import the telegram admin bot service to call the handler
+                        # We can't directly call the method here, so we'll return a special code
+                        # that indicates we should route to the update_group_chat_selection
+                        return 1024  # UPDATE_GROUP_CHAT_SELECTION_CODE
+                        
                     # For other commands, execute directly
                     elif command_type == "enable_shift":
                         await query.edit_message_text(f"Executing enable shift for chat: {chat.group_name}")
@@ -180,6 +190,8 @@ class ChatSearchHandler:
                         return 1006  # ENABLE_SHIFT_COMMAND_CODE
                     elif command_type == "query_package":
                         return 1020  # QUERY_PACKAGE_COMMAND_CODE
+                    elif command_type == "update_group":
+                        return 1023  # UPDATE_GROUP_COMMAND_CODE
                     else:
                         return 1003  # PACKAGE_COMMAND_CODE
 
@@ -193,6 +205,8 @@ class ChatSearchHandler:
                         return 1006  # ENABLE_SHIFT_COMMAND_CODE
                     elif command_type == "query_package":
                         return 1020  # QUERY_PACKAGE_COMMAND_CODE
+                    elif command_type == "update_group":
+                        return 1023  # UPDATE_GROUP_COMMAND_CODE
                     else:
                         return 1003  # PACKAGE_COMMAND_CODE
 
@@ -293,6 +307,8 @@ class ChatSearchHandler:
             # Return appropriate state code based on command type
             if command_type == "query_package":
                 return 1021  # QUERY_PACKAGE_CHAT_SELECTION_CODE
+            elif command_type == "update_group":
+                return 1024  # UPDATE_GROUP_CHAT_SELECTION_CODE
             else:
                 return 1010  # CHAT_SELECTION_CODE
             

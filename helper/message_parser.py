@@ -60,6 +60,25 @@ def extract_amount_and_currency(text: str):
             return None, None
         return currency, amount
     
+    # Pattern 5: "Amount: KHR 562,500" format (payment notification)
+    match = re.search(r'Amount:\s+(USD|KHR)\s+([\d,]+(?:\.\d+)?)', text, re.IGNORECASE)
+    if match:
+        currency_code = match.group(1).upper()
+        amount_str = match.group(2).replace(',', '')
+        
+        # Convert currency codes to symbols
+        currency_map = {
+            'USD': '$',
+            'KHR': '៛'
+        }
+        currency = currency_map.get(currency_code, currency_code)
+        
+        try:
+            amount = float(amount_str) if '.' in amount_str else int(amount_str)
+        except ValueError:
+            return None, None
+        return currency, amount
+    
     return None, None
 
 def extract_khmer_money_amount(text: str) -> float | None:
@@ -184,6 +203,16 @@ def extract_trx_id(message_text: str) -> str | None:
     
     # Pattern 8: Transaction ID format "Transaction ID: 099QORT252080682"
     match = re.search(r'Transaction ID:\s*([a-zA-Z0-9]+)', message_text)
+    if match:
+        return match.group(1)
+    
+    # Pattern 9: Reference No format "Reference No: 737407541"
+    match = re.search(r'Reference No:\s*([0-9]+)', message_text)
+    if match:
+        return match.group(1)
+    
+    # Pattern 10: Hash format "Hash: 2e720fc0"
+    match = re.search(r'Hash:\s*([a-f0-9]+)', message_text, re.IGNORECASE)
     if match:
         return match.group(1)
     

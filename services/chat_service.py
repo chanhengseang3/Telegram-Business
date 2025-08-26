@@ -111,6 +111,28 @@ class ChatService:
             finally:
                 session.close()
 
+    @staticmethod
+    async def get_chat_thresholds(chat_id: int) -> dict | None:
+        """Get USD and KHR thresholds for a chat"""
+        with get_db_session() as session:
+            try:
+                chat = (
+                    session.query(Chat.usd_threshold, Chat.khr_threshold)
+                    .filter_by(chat_id=chat_id)
+                    .first()
+                )
+                if chat:
+                    return {
+                        "usd_threshold": float(chat.usd_threshold) if chat.usd_threshold is not None else None,
+                        "khr_threshold": float(chat.khr_threshold) if chat.khr_threshold is not None else None
+                    }
+                return None
+            except Exception as e:
+                force_log(f"Error fetching chat thresholds: {e}")
+                return None
+            finally:
+                session.close()
+
 
     @staticmethod
     async def search_chats_by_chat_id_or_name(search_term: str, limit: int = 5) -> list[Chat]:
@@ -244,6 +266,40 @@ class ChatService:
         except Exception as e:
             force_log(f"Error checking shift enabled: {e}")
             return False
+
+    @staticmethod
+    async def update_chat_threshold(chat_id: int, threshold_type: str, value: float) -> bool:
+        """Update threshold value (USD or KHR) for a chat"""
+        with get_db_session() as session:
+            try:
+                update_data = {}
+                if threshold_type.lower() == "usd":
+                    update_data["usd_threshold"] = value
+                elif threshold_type.lower() == "khr":
+                    update_data["khr_threshold"] = value
+                else:
+                    force_log(f"Invalid threshold type: {threshold_type}")
+                    return False
+                
+                result = (
+                    session.query(Chat)
+                    .filter_by(chat_id=chat_id)
+                    .update(update_data)
+                )
+                
+                session.commit()
+                if result > 0:
+                    force_log(f"Successfully updated {threshold_type} threshold to {value} for chat {chat_id}")
+                    return True
+                else:
+                    force_log(f"No chat found with chat_id {chat_id}")
+                    return False
+            except Exception as e:
+                session.rollback()
+                force_log(f"Error updating {threshold_type} threshold: {e}")
+                return False
+            finally:
+                session.close()
 
     @staticmethod
     async def migrate_chat_id(old_chat_id: int, new_chat_id: int) -> bool:

@@ -1,3 +1,4 @@
+from calendar import monthrange
 from datetime import timedelta, datetime
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -6,7 +7,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 from helper import DateUtils, daily_transaction_report, weekly_transaction_report, monthly_transaction_report, \
     shift_report
 from helper.logger_utils import force_log
-from services import ChatService, IncomeService, ShiftService
+from services import ChatService, IncomeService, ShiftService, GroupPackageService
 
 
 class MenuHandler:
@@ -24,19 +25,11 @@ class MenuHandler:
             today = DateUtils.now()
             keyboard = []
 
-            # Check if shift is enabled for this chat
-            shift_enabled = await self.chat_service.is_shift_enabled(int(chat_id))
-            if shift_enabled:
-                keyboard.append(
-                    [
-                        InlineKeyboardButton(
-                            "ប្រចាំវេនថ្ងៃនេះ", callback_data="report_per_shift"
-                        )
-                    ]
-                )
-                # Only show current date for shift-enabled chats
-                label = today.strftime("ថ្ងៃនេះ")
-                callback_value = today.strftime("%Y-%m-%d")
+            # Show 3 days for non-shift chats
+            for i in range(2, -1, -1):
+                day = today - timedelta(days=i)
+                label = day.strftime("%b %d")
+                callback_value = day.strftime("%Y-%m-%d")
                 keyboard.append(
                     [
                         InlineKeyboardButton(
@@ -44,19 +37,6 @@ class MenuHandler:
                         )
                     ]
                 )
-            else:
-                # Show 3 days for non-shift chats
-                for i in range(2, -1, -1):
-                    day = today - timedelta(days=i)
-                    label = day.strftime("%b %d")
-                    callback_value = day.strftime("%Y-%m-%d")
-                    keyboard.append(
-                        [
-                            InlineKeyboardButton(
-                                label, callback_data=f"summary_of_{callback_value}"
-                            )
-                        ]
-                    )
 
             keyboard.append(
                 [InlineKeyboardButton("ថ្ងៃផ្សេងទៀត", callback_data="other_dates")]
@@ -81,11 +61,9 @@ class MenuHandler:
                 return False
 
             # Get current date using DateUtils
-            from helper import DateUtils
             current_date = DateUtils.now()
             
             # Use the same method as _handle_date_summary
-            from services import IncomeService
             income_service = IncomeService()
             incomes = await income_service.get_income_by_specific_date_and_chat_id(
                 chat_id=chat_id,
@@ -108,7 +86,6 @@ class MenuHandler:
                     # If user is anonymous, username will remain "Admin"
                 
                 # Use daily report format for current date
-                from helper import daily_transaction_report
                 group_name = chat.group_name or f"Group {chat.chat_id}"
                 message = daily_transaction_report(incomes, current_date, telegram_username, group_name)
 
@@ -123,41 +100,36 @@ class MenuHandler:
     async def _handle_weekly_summary_menu(self, chat_id: int, query):
         """Handle weekly summary by showing week selection menu like normal bot"""
         try:
-            from helper import DateUtils
             now = DateUtils.now()
+            current_year = now.year
+            current_month = now.month
             
-            # Get this week's Monday (start of current week)
-            this_week_monday = now - timedelta(days=now.weekday())
-            
-            # Get last week's Monday (start of previous week)
-            last_week_monday = this_week_monday - timedelta(days=7)
-            
+            _, days_in_month = monthrange(current_year, current_month)
+
             keyboard = []
             
-            # Add this week button
-            this_week_sunday = this_week_monday + timedelta(days=6)
-            if this_week_monday.month != this_week_sunday.month:
-                this_week_label = f"សប្តាហ៍នេះ ({this_week_monday.strftime('%d %b')} - {this_week_sunday.strftime('%d %b %Y')})"
-            else:
-                this_week_label = f"សប្តាហ៍នេះ ({this_week_monday.strftime('%d')} - {this_week_sunday.strftime('%d %b %Y')})"
+            # Week 1: 1-7
+            week1_end = min(7, days_in_month)
+            keyboard.append([InlineKeyboardButton(f"សប្តាហ៍ 1 (1-{week1_end})", callback_data=f"summary_week_{current_year}-{current_month:02d}-1")])
             
-            this_week_callback = this_week_monday.strftime("%Y-%m-%d")
-            keyboard.append([InlineKeyboardButton(this_week_label, callback_data=f"summary_week_{this_week_callback}")])
+            # Week 2: 8-14
+            if days_in_month >= 8:
+                week2_end = min(14, days_in_month)
+                keyboard.append([InlineKeyboardButton(f"សប្តាហ៍ 2 (8-{week2_end})", callback_data=f"summary_week_{current_year}-{current_month:02d}-2")])
             
-            # Add last week button
-            last_week_sunday = last_week_monday + timedelta(days=6)
-            if last_week_monday.month != last_week_sunday.month:
-                last_week_label = f"សប្តាហ៍មុន ({last_week_monday.strftime('%d %b')} - {last_week_sunday.strftime('%d %b %Y')})"
-            else:
-                last_week_label = f"សប្តាហ៍មុន ({last_week_monday.strftime('%d')} - {last_week_sunday.strftime('%d %b %Y')})"
+            # Week 3: 15-21
+            if days_in_month >= 15:
+                week3_end = min(21, days_in_month)
+                keyboard.append([InlineKeyboardButton(f"សប្តាហ៍ 3 (15-{week3_end})", callback_data=f"summary_week_{current_year}-{current_month:02d}-3")])
             
-            last_week_callback = last_week_monday.strftime("%Y-%m-%d")
-            keyboard.append([InlineKeyboardButton(last_week_label, callback_data=f"summary_week_{last_week_callback}")])
+            # Week 4: 22-end of month
+            if days_in_month >= 22:
+                keyboard.append([InlineKeyboardButton(f"សប្តាហ៍ 4 (22-{days_in_month})", callback_data=f"summary_week_{current_year}-{current_month:02d}-4")])
             
             keyboard.append([InlineKeyboardButton("ត្រឡប់ក្រោយ", callback_data="menu")])
             
             reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.edit_message_text("ជ្រើសរើសសប្តាហ៍:", reply_markup=reply_markup)
+            await query.edit_message_text(f"📆 របាយការណ៍ប្រចាំសប្តាហ៍ - {now.strftime('%B %Y')}\n\nជ្រើសរើសសប្តាហ៍:", reply_markup=reply_markup)
             return True
 
         except Exception as e:
@@ -168,8 +140,6 @@ class MenuHandler:
     async def _handle_monthly_summary_menu(self, chat_id: int, query):
         """Handle monthly summary by showing month selection menu like normal bot"""
         try:
-            from helper import DateUtils
-            from datetime import datetime
             now = DateUtils.now()
             year = now.year
             keyboard = []
@@ -204,8 +174,8 @@ class MenuHandler:
         """Handle shift summary by showing shift selection menu like business bot"""
         try:
             keyboard = [
-                [InlineKeyboardButton("ប្រចាំវេនថ្ងៃនេះ", callback_data="report_per_shift")],
-                [InlineKeyboardButton("ថ្ងៃផ្សេងទៀត", callback_data="other_shift_dates")],
+                [InlineKeyboardButton("ប្រចាំវេននេះ", callback_data="report_per_shift")],
+                [InlineKeyboardButton("វេនផ្សេងទៀត", callback_data="other_shift_dates")],
                 [InlineKeyboardButton("ត្រឡប់ក្រោយ", callback_data="menu")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -299,8 +269,6 @@ class MenuHandler:
         """Handle current shift report for today"""
         try:
             # Get current shift data for today
-            from services import ShiftService
-            from helper import DateUtils
             
             shift_service = ShiftService()
             current_date = DateUtils.now().date()
@@ -316,7 +284,6 @@ class MenuHandler:
                 return ConversationHandler.END
             
             # Get shift report
-            from helper import shift_report
             report = await shift_report(shift.id, shift.number, current_date)
             
             await query.edit_message_text(report, parse_mode='HTML')
@@ -330,10 +297,8 @@ class MenuHandler:
     async def _handle_other_shift_dates(self, chat_id: int, query):
         """Handle other shift dates selection like business bot"""
         try:
-            from services import ShiftService
-            
             shift_service = ShiftService()
-            recent_dates = await shift_service.get_recent_end_dates_with_shifts(chat_id, 3)
+            recent_dates = await shift_service.get_recent_start_dates_with_shifts(chat_id, 3)
             
             if not recent_dates:
                 keyboard = [
@@ -352,6 +317,7 @@ class MenuHandler:
                     display_date = date.strftime("%d %b %Y")
                     keyboard.append([InlineKeyboardButton(display_date, callback_data=f"shift_date_{date_str}")])
                 
+                keyboard.append([InlineKeyboardButton("ថ្ងៃផ្សេងទៀត", callback_data="show_all_month_dates")])
                 keyboard.append([InlineKeyboardButton("ត្រឡប់ក្រោយ", callback_data="shift_summary")])
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
@@ -377,8 +343,8 @@ class MenuHandler:
             shift_date_obj = datetime.strptime(date_str, "%Y-%m-%d")
             shift_date = shift_date_obj.date()
             
-            # Get shifts for the specific date (by end date for admin bot)
-            shifts = await shift_service.get_shifts_by_end_date(chat_id, shift_date)
+            # Get shifts for the specific date (by start date for admin bot)
+            shifts = await shift_service.get_shifts_by_start_date(chat_id, shift_date)
             
             if not shifts:
                 await query.edit_message_text(
@@ -411,11 +377,69 @@ class MenuHandler:
             await query.edit_message_text(f"Error generating shift report: {str(e)}")
             return False
 
+    async def _handle_show_all_month_dates(self, chat_id: int, query):
+        """Show all dates with shifts in the current month"""
+        try:
+            from datetime import datetime
+            from calendar import monthrange
+            
+            shift_service = ShiftService()
+            now = DateUtils.now()
+            current_month = now.month
+            current_year = now.year
+            
+            # Get all dates in current month that have shifts
+            all_dates_with_shifts = await shift_service.get_all_start_dates_with_shifts_in_month(
+                chat_id, current_year, current_month
+            )
+            
+            if not all_dates_with_shifts:
+                keyboard = [
+                    [InlineKeyboardButton("ត្រឡប់ក្រោយ", callback_data="other_shift_dates")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await query.edit_message_text(
+                    f"📅 ថ្ងៃទាំងអស់ - {now.strftime('%B %Y')}\n\n🔴 គ្មានទិន្នន័យសម្រាប់ខែនេះ។",
+                    reply_markup=reply_markup
+                )
+            else:
+                # Arrange dates in 5 columns
+                keyboard = []
+                row = []
+                for date in all_dates_with_shifts:
+                    date_str = date.strftime("%Y-%m-%d")
+                    display_date = date.strftime("%d %b")  # Shorter format for columns
+                    row.append(InlineKeyboardButton(display_date, callback_data=f"shift_date_{date_str}"))
+                    
+                    # Add row to keyboard when we have 5 buttons
+                    if len(row) == 5:
+                        keyboard.append(row)
+                        row = []
+                
+                # Add remaining buttons in the last row
+                if row:
+                    keyboard.append(row)
+                
+                keyboard.append([InlineKeyboardButton("ត្រឡប់ក្រោយ", callback_data="other_shift_dates")])
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await query.edit_message_text(
+                    f"📅 ថ្ងៃទាំងអស់ - {now.strftime('%B %Y')}\n\nជ្រើសរើសថ្ងៃដែលអ្នកចង់មើល:",
+                    reply_markup=reply_markup
+                )
+            
+            return True
+            
+        except Exception as e:
+            force_log(f"Error in _handle_show_all_month_dates: {e}", "MenuHandler")
+            await query.edit_message_text(f"Error showing all month dates: {str(e)}")
+            return False
+
     @staticmethod
     async def _handle_other_dates(query):
         """Handle other dates - show current month dates"""
         try:
-            from helper import DateUtils
             now = DateUtils.now()
             current_month = now.month
             current_year = now.year
@@ -427,7 +451,6 @@ class MenuHandler:
             month_name = now.strftime("%B %Y")
             
             # Add dates in rows of 7 (like calendar)
-            from calendar import monthrange
             _, last_day = monthrange(current_year, current_month)
             
             # Group dates in rows of 5 for better mobile display
@@ -460,14 +483,33 @@ class MenuHandler:
     async def _handle_week_summary(chat_id: int, callback_data: str, query):
         """Handle week summary like normal bot"""
         try:
-            from datetime import datetime
-            from services import IncomeService
-            from helper import weekly_transaction_report
             
-            start_date = datetime.strptime(
-                callback_data.replace("summary_week_", ""), "%Y-%m-%d"
-            )
-            end_date = start_date + timedelta(days=7)
+            # Parse callback data: YYYY-MM-W format
+            date_parts = callback_data.replace("summary_week_", "").split("-")
+            year = int(date_parts[0])
+            month = int(date_parts[1])
+            week_number = int(date_parts[2])
+            
+            # Calculate start and end dates based on week number
+            _, days_in_month = monthrange(year, month)
+            
+            if week_number == 1:
+                start_day = 1
+                end_day = min(7, days_in_month)
+            elif week_number == 2:
+                start_day = 8
+                end_day = min(14, days_in_month)
+            elif week_number == 3:
+                start_day = 15
+                end_day = min(21, days_in_month)
+            elif week_number == 4:
+                start_day = 22
+                end_day = days_in_month
+            else:
+                raise ValueError(f"Invalid week number: {week_number}")
+            
+            start_date = datetime(year, month, start_day)
+            end_date = datetime(year, month, end_day) + timedelta(days=1)  # End of day
             
             income_service = IncomeService()
             incomes = await income_service.get_income_by_date_and_chat_id(
@@ -477,7 +519,7 @@ class MenuHandler:
             )
 
             if not incomes:
-                period_text = f"{start_date.strftime('%d')} - {(end_date - timedelta(days=1)).strftime('%d %b %Y')}"
+                period_text = f"សប្តាហ៍ {week_number} ({start_day}-{end_day} {start_date.strftime('%B %Y')})"
                 message = f"គ្មានប្រតិបត្តិការសម្រាប់ {period_text} ទេ។"
             else:
                 # Use weekly report format
@@ -495,10 +537,6 @@ class MenuHandler:
     async def _handle_month_summary(chat_id: int, callback_data: str, query):
         """Handle month summary like normal bot"""
         try:
-            from datetime import datetime
-            from calendar import monthrange
-            from services import IncomeService
-            from helper import monthly_transaction_report
             
             start_date = datetime.strptime(
                 callback_data.replace("summary_month_", ""), "%Y-%m"
@@ -654,7 +692,6 @@ class MenuHandler:
                     return ConversationHandler.END
 
                 # Import GroupPackageService here to avoid circular imports
-                from services.group_package_service import GroupPackageService
                 group_package_service = GroupPackageService()
                 
                 # Get group package to determine available options
@@ -662,7 +699,10 @@ class MenuHandler:
                 package_type = group_package.package if group_package else None
                 
                 keyboard = []
-                
+
+                if package_type and package_type.value == 'BUSINESS':
+                    keyboard.append([InlineKeyboardButton("តាមវេន", callback_data="shift_summary")])
+
                 # Always available options
                 keyboard.append([InlineKeyboardButton("ប្រចាំថ្ងៃ", callback_data="daily_summary")])
                 
@@ -670,10 +710,7 @@ class MenuHandler:
                 if package_type and package_type.value in ['STANDARD', 'BUSINESS']:
                     keyboard.append([InlineKeyboardButton("ប្រចាំសប្តាហ៍", callback_data="weekly_summary")])
                     keyboard.append([InlineKeyboardButton("ប្រចាំខែ", callback_data="monthly_summary")])
-                
-                if package_type and package_type.value == 'BUSINESS':
-                    keyboard.append([InlineKeyboardButton("តាមវេន", callback_data="shift_summary")])
-                
+
                 keyboard.append([InlineKeyboardButton("បិទ", callback_data="close_menu")])
                 reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -699,6 +736,9 @@ class MenuHandler:
                 return ConversationHandler.END  # End conversation after showing final report
             elif callback_data == "other_shift_dates":
                 result = await self._handle_other_shift_dates(chat_id, query)
+                return 1008 if result else ConversationHandler.END  # CALLBACK_QUERY_CODE
+            elif callback_data == "show_all_month_dates":
+                result = await self._handle_show_all_month_dates(chat_id, query)
                 return 1008 if result else ConversationHandler.END  # CALLBACK_QUERY_CODE
             elif callback_data.startswith("shift_date_"):
                 date_str = callback_data.replace("shift_date_", "")

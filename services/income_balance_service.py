@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta
 
 from sqlalchemy import func
@@ -13,6 +14,8 @@ from .shift_service import ShiftService
 class IncomeService:
     def __init__(self):
         self.shift_service = ShiftService()
+        # Threshold warning service will be set from telethon client
+        self.threshold_warning_service = None
 
     async def ensure_active_shift(self, chat_id: int) -> int:
         force_log(f"_ensure_active_shift called for chat_id: {chat_id}")
@@ -146,6 +149,16 @@ class IncomeService:
                     force_log(
                         f"Successfully saved IncomeBalance record with id={new_income.id}"
                     )
+                    
+                    # Check thresholds after saving income (fire and forget)
+                    if self.threshold_warning_service:
+                        asyncio.create_task(self._check_thresholds_async(
+                            chat_id=chat_id,
+                            shift_id=shift_id,
+                            new_income_amount=amount,
+                            new_income_currency=currency_code
+                        ))
+                    
                     return new_income
 
                 except Exception as e:
@@ -155,6 +168,18 @@ class IncomeService:
         except Exception as e:
             force_log(f"ERROR in insert_income: {e}")
             raise e
+
+    async def _check_thresholds_async(self, chat_id: int, shift_id: int, new_income_amount: float, new_income_currency: str):
+        """Non-blocking threshold check helper method"""
+        try:
+            await self.threshold_warning_service.check_and_send_warnings(
+                chat_id=chat_id,
+                new_income_amount=new_income_amount,
+                new_income_currency=new_income_currency
+            )
+        except Exception as threshold_error:
+            # Don't fail the income saving if threshold check fails
+            force_log(f"Error in threshold check (non-blocking): {threshold_error}", "ERROR")
 
     async def get_income(self, income_id: int) -> IncomeBalance | None:
         with get_db_session() as db:

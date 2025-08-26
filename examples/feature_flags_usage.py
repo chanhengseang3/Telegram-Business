@@ -137,6 +137,7 @@ async def setup_package_features(chat_id: int, package_type: str):
             FeatureFlags.ADVANCED_ANALYTICS.value: True,
             FeatureFlags.CUSTOM_EXPORT.value: True,
             FeatureFlags.SHIFT_MANAGEMENT.value: True,
+            FeatureFlags.SHIFT_PERMISSIONS.value: True,
             FeatureFlags.API_ACCESS.value: True,
         }
     else:

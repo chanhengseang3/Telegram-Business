@@ -399,7 +399,10 @@ class TelegramPrivateBot:
         package_type = group_package.package if group_package else None
         
         keyboard = []
-        
+
+        if package_type and package_type.value == 'BUSINESS':
+            keyboard.append([InlineKeyboardButton("តាមវេន", callback_data="shift_summary")])
+
         # Daily option - different callback based on package
         if package_type and package_type.value in ['TRIAL', 'STANDARD', 'BUSINESS']:
             keyboard.append([InlineKeyboardButton("ប្រចាំថ្ងៃ", callback_data="daily_summary")])
@@ -411,10 +414,7 @@ class TelegramPrivateBot:
         if package_type and package_type.value in ['STANDARD', 'BUSINESS']:
             keyboard.append([InlineKeyboardButton("ប្រចាំសប្តាហ៍", callback_data="weekly_summary")])
             keyboard.append([InlineKeyboardButton("ប្រចាំខែ", callback_data="monthly_summary")])
-        
-        if package_type and package_type.value == 'BUSINESS':
-            keyboard.append([InlineKeyboardButton("តាមវេន", callback_data="shift_summary")])
-        
+
         keyboard.append([InlineKeyboardButton("បិទ", callback_data="close_menu")])
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -578,6 +578,22 @@ class TelegramPrivateBot:
         """Cancel command"""
         await update.message.reply_text("Operation cancelled.")
         return ConversationHandler.END
+
+    async def send_message(self, chat_id: int, message: str) -> bool:
+        """Send a message to a specific chat"""
+        force_log(f"Private bot send_message called for chat_id: {chat_id}")
+        try:
+            if self.app and self.app.bot:
+                force_log(f"Attempting to send message to private chat {chat_id}")
+                await self.app.bot.send_message(chat_id=chat_id, text=message, parse_mode="HTML")
+                force_log(f"Successfully sent message to private chat {chat_id}")
+                return True
+            else:
+                force_log("Private bot application not initialized", "ERROR")
+                return False
+        except Exception as e:
+            force_log(f"Error sending message to private chat {chat_id}: {e}", "ERROR")
+            return False
 
     def setup(self):
         """Set up the bot handlers"""

@@ -14,9 +14,10 @@ from telegram.ext import (
 
 from common.enums import ServicePackage
 from handlers.business_event_handler import BusinessEventHandler
-from helper import force_log
+from helper import force_log, DateUtils
 from services import ChatService, UserService, GroupPackageService
 from services.private_bot_group_binding_service import PrivateBotGroupBindingService
+from services.shift_service import ShiftService
 
 # Get logger
 logger = logging.getLogger(__name__)
@@ -39,7 +40,8 @@ class AutosumBusinessBot:
         self.app: Application | None = None
         self.chat_service = ChatService()
         self.user_service = UserService()
-        self.event_handler = BusinessEventHandler()
+        self.shift_service = ShiftService()
+        self.event_handler = BusinessEventHandler(bot_service=self)
         self.group_package_service = GroupPackageService()
         force_log("AutosumBusinessBot initialized with token", "AutosumBusinessBot")
 
@@ -143,10 +145,30 @@ class AutosumBusinessBot:
         else:
             private_chats = None
         if private_chats:
-            message = f"""សូមប្រើPrivate Groupដើម្បីបូក
-            """
-            await update.message.reply_text(message)
-            return ConversationHandler.END
+            # Allow only close shift functionality in public groups bound to private chats
+            # Get current shift information to display
+            try:
+                current_shift = await self.shift_service.get_current_shift(chat_id)
+                if current_shift:
+                    current_date = DateUtils.now().strftime('%d-%B-%Y')
+                    message = f"""វេនទី {current_shift.number}: ថ្ងៃទី {current_date}"""
+                else:
+                    current_date = DateUtils.now().strftime('%d-%B-%Y')
+                    message = f"""វេនទី -: ថ្ងៃទី {current_date}"""
+            except Exception as e:
+                force_log(f"Error getting shift info: {e}", "AutosumBusinessBot")
+                current_date = DateUtils.now().strftime('%d-%B-%Y')
+                message = f"""វេនទី -: ថ្ងៃទី {current_date}"""
+            
+            # Create a limited menu with just the close shift button
+            keyboard = [
+                [InlineKeyboardButton("🛑 បិទបញ្ជី", callback_data="close_shift")],
+                [InlineKeyboardButton("ត្រលប់ក្រោយ", callback_data="close_menu")],
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(message, reply_markup=reply_markup)
+            return BUSINESS_MENU_CODE
 
         # Create a mock event object for the business event handler
         class MockEvent:
@@ -198,14 +220,14 @@ class AutosumBusinessBot:
                 self.parent = parent
                 self.chat = query.message.chat
 
-            async def edit(self, message, buttons=None):
+            async def edit(self, message, buttons=None, parse_mode=None):
                 keyboard = (
                     self.parent._convert_buttons_to_keyboard(buttons)
                     if buttons
                     else None
                 )
                 try:
-                    await self.query.edit_message_text(message, reply_markup=keyboard)
+                    await self.query.edit_message_text(message, reply_markup=keyboard, parse_mode=parse_mode)
                 except Exception as e:
                     if "Message is not modified" in str(e):
                         force_log(f"Message content is identical, skipping edit for chat {self.chat_id}")

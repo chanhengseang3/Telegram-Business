@@ -13,6 +13,7 @@ from helper import extract_amount_and_currency, extract_trx_id, extract_s7pos_am
 from helper.logger_utils import force_log
 from schedulers import MessageVerificationScheduler
 from services import ChatService, IncomeService, UserService, GroupPackageService
+from services.threshold_warning_service import ThresholdWarningService
 
 
 class TelethonClientService:
@@ -81,6 +82,9 @@ class TelethonClientService:
             self.client = TelegramClient(mobile, int(api_id), api_hash)
             await self.client.connect()
             await self.client.start(phone=mobile)  # type: ignore
+            # Initialize threshold warning service and attach to income service
+            threshold_service = ThresholdWarningService(telethon_client=self.client)
+            self.service.threshold_warning_service = threshold_service
             force_log(f"Account {mobile} started...")
         except PersistentTimestampInvalidError:
             force_log(f"Session corrupted for {mobile}, removing session file...")
@@ -91,6 +95,9 @@ class TelethonClientService:
             self.client = TelegramClient(mobile, int(api_id), api_hash)
             await self.client.connect()
             await self.client.start(phone=mobile)  # type: ignore
+            # Initialize threshold warning service and attach to income service
+            threshold_service = ThresholdWarningService(telethon_client=self.client)
+            self.service.threshold_warning_service = threshold_service
             force_log(f"Account {mobile} restarted with clean session...")
         except TimeoutError as e:
             force_log(f"Connection timeout for {mobile}: {e}")
@@ -133,6 +140,7 @@ class TelethonClientService:
                     "chipmongbankpaymentbot",
                     "prasac_merchant_payment_bot",
                     "AMKPlc_bot",
+                    "prince_pay_bot",
                     "s7pos_bot"
                 }
                 if username not in allowed_bots:
